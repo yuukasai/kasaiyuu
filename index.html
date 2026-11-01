@@ -256,6 +256,7 @@ a.work:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
         <div><dt>テレビ</dt><dd>タップすると けいれきが みられます。ばんぐみの ひとつは てんき よほう です(てきとうな よほう なので あてにしないでね)。</dd></div>
         <div><dt>くだもの</dt><dd>かごの くだものは、いまの きせつで かわります。タップすると りゆうを おしえてくれます。</dd></div>
         <div><dt>とだな</dt><dd>タップすると、本を とってきて さくひんを みせてくれます。</dd></div>
+        <div><dt>まど</dt><dd>そとの けしきは、みている ばしょの きせつと じかんで かわります(ばしょは タイムゾーンから そうぞうしています)。</dd></div>
         <div><dt>カレンダー</dt><dd>とだなの うえに あります。ひづけは じどうで かわります。タップすると おおきく みられます。</dd></div>
         <div><dt>ざぶとん</dt><dd>あおは すわって テレビ、みどりは おひるね。</dd></div>
         <div><dt>ゆのみ</dt><dd>あつい ので ちゅうい。</dd></div>
@@ -582,6 +583,89 @@ calFace.position.set(0,0,0.02);calFace.userData.kind='calendar';calCard.add(calF
 var calStand=mk(roundedBoxGeo(0.4,0.34,0.02,0.02,0.008),0xdcdde3,{t:0.012});
 calStand.position.set(0,0.17,-0.15);calStand.rotation.x=0.5;calG.add(calStand);
 checkCalendar();
+
+/* window wall with a live outside view (season of the visitor's region, local time of day) */
+var WINC=visitorClimate();
+var winCv=document.createElement('canvas');winCv.width=160;winCv.height=120;
+var wg=winCv.getContext('2d');
+var winTex=new T.CanvasTexture(winCv);winTex.magFilter=T.NearestFilter;winTex.minFilter=T.NearestFilter;winTex.generateMipmaps=false;
+var SKY=[[0,'#0b1330','#24407a'],[5,'#1a2a58','#6b5a8e'],[6.5,'#6f86c4','#f7b98a'],[9,'#62b9ec','#cdeefb'],[15,'#5fb4ea','#c4e8fa'],[17,'#7aa7dd','#f6c490'],[18.5,'#4a4f94','#e58f6a'],[20,'#16224a','#3a3f7a'],[24,'#0b1330','#24407a']];
+function rgbOf(h){return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+function mixHex(a,b,k){var x=rgbOf(a),y=rgbOf(b);return 'rgb('+Math.round(x[0]+(y[0]-x[0])*k)+','+Math.round(x[1]+(y[1]-x[1])*k)+','+Math.round(x[2]+(y[2]-x[2])*k)+')';}
+function skyAt(h){
+  for(var i=0;i<SKY.length-1;i++){
+    if(h>=SKY[i][0]&&h<=SKY[i+1][0]){var k=(h-SKY[i][0])/(SKY[i+1][0]-SKY[i][0]);return [mixHex(SKY[i][1],SKY[i+1][1],k),mixHex(SKY[i][2],SKY[i+1][2],k)];}
+  }
+  return [SKY[0][1],SKY[0][2]];
+}
+function nowSeason(){return WINC.tropical?'summer':seasonOf(new Date().getMonth(),WINC.lat);}
+var HILLS={spring:['#b9dc9a','#97cc78'],summer:['#5fae55','#479a47'],autumn:['#e0b052','#cc8238'],winter:['#f4f8fc','#e1eaf3']};
+var lastWin=-1;
+function drawWindow(t){
+  if(t-lastWin<0.08)return;lastWin=t;
+  var g=wg,d=new Date(),h=d.getHours()+d.getMinutes()/60,season=nowSeason(),i,k;
+  var lum=Math.max(0,Math.sin((h-6)/12*Math.PI)),night=1-sstep(0,0.35,lum);
+  var sk=skyAt(h),gr=g.createLinearGradient(0,0,0,100);gr.addColorStop(0,sk[0]);gr.addColorStop(1,sk[1]);
+  g.fillStyle=gr;g.fillRect(0,0,160,120);
+  if(night>0.1){g.fillStyle='#fff';for(i=0;i<26;i++){g.globalAlpha=night*(0.45+0.5*Math.sin(t*2+i*1.7));g.fillRect((i*47)%160,(i*29)%62,1,1);}g.globalAlpha=1;}
+  if(h>=6&&h<=18){
+    k=(h-6)/12;var sx=14+132*k,sy=100-80*Math.sin(k*Math.PI);
+    g.fillStyle='rgba(255,240,170,0.35)';g.beginPath();g.arc(sx,sy,11,0,Math.PI*2);g.fill();
+    g.fillStyle='#ffe27a';g.beginPath();g.arc(sx,sy,7,0,Math.PI*2);g.fill();
+  }else{
+    k=((h+6)%24)/12;var mx=14+132*k,my=100-70*Math.sin(k*Math.PI);
+    g.fillStyle='#f4f1d0';g.beginPath();g.arc(mx,my,6,0,Math.PI*2);g.fill();
+    g.fillStyle=sk[0];g.beginPath();g.arc(mx+3,my-2,5.2,0,Math.PI*2);g.fill();
+  }
+  g.fillStyle=season==='winter'?'rgba(225,232,240,0.9)':'rgba(255,255,255,0.88)';
+  for(i=0;i<3;i++){var cx=((t*3+i*70)%220)-40,cy=12+i*13;g.fillRect(cx,cy+3,26,5);g.fillRect(cx+4,cy,13,5);g.fillRect(cx+12,cy+1,10,5);}
+  var hc=HILLS[season];
+  g.fillStyle=hc[0];g.beginPath();g.moveTo(0,120);for(i=0;i<=160;i+=4)g.lineTo(i,78+Math.sin(i*0.05+0.6)*7+Math.sin(i*0.13)*2);g.lineTo(160,120);g.closePath();g.fill();
+  g.fillStyle=hc[1];g.beginPath();g.moveTo(0,120);for(i=0;i<=160;i+=4)g.lineTo(i,94+Math.sin(i*0.04+2.1)*5);g.lineTo(160,120);g.closePath();g.fill();
+  [[28,95,1],[116,92,0.86],[76,100,0.66]].forEach(function(tr,n){
+    var x=tr[0],y=tr[1],sc=tr[2];
+    g.fillStyle='#6b4a2e';g.fillRect(x-1.5*sc,y-13*sc,3*sc,13*sc);
+    if(season==='winter'){
+      g.strokeStyle='#6b4a2e';g.lineWidth=1;g.beginPath();g.moveTo(x,y-13*sc);g.lineTo(x-7*sc,y-22*sc);g.moveTo(x,y-13*sc);g.lineTo(x+7*sc,y-21*sc);g.moveTo(x,y-16*sc);g.lineTo(x+3*sc,y-26*sc);g.stroke();
+      g.fillStyle='#fff';g.fillRect(x-8*sc,y-23*sc,3*sc,1.5);g.fillRect(x+6*sc,y-22*sc,3*sc,1.5);
+    }else{
+      var cols={spring:['#f5b4c6','#f9cfdb'],summer:['#2f8a3c','#3fa24a'],autumn:['#e0602a','#f0a030']}[season];
+      g.fillStyle=cols[n%2];g.beginPath();g.arc(x,y-20*sc,9*sc,0,Math.PI*2);g.fill();
+      g.fillStyle=cols[(n+1)%2];g.beginPath();g.arc(x-6*sc,y-15*sc,6*sc,0,Math.PI*2);g.arc(x+6*sc,y-16*sc,6*sc,0,Math.PI*2);g.fill();
+    }
+  });
+  var cnt=season==='summer'?0:22,vx={spring:6,autumn:8,winter:3}[season]||0,vy={spring:12,autumn:14,winter:16}[season]||0;
+  for(i=0;i<cnt;i++){
+    var px=(((i*37.7+t*vx+Math.sin(t*0.9+i)*5)%168)+168)%168-4,py=(((i*53.3+t*vy*(0.7+0.15*(i%4)))%128)+128)%128-4;
+    if(season==='spring')g.fillStyle='#f8c1d1';
+    else if(season==='autumn')g.fillStyle=['#e0602a','#f0a030','#b8402a'][i%3];
+    else g.fillStyle='#fff';
+    g.fillRect(px,py,season==='winter'?1.6:2.2,season==='winter'?1.6:1.4);
+  }
+  if(night>0.05){g.fillStyle='rgba(8,16,48,'+(0.42*night).toFixed(3)+')';g.fillRect(0,0,160,120);}
+  if(season==='summer'&&night>0.6){g.fillStyle='#d6f06a';for(i=0;i<9;i++){g.globalAlpha=Math.max(0,Math.sin(t*1.3+i*2.1));g.fillRect(10+(i*37+Math.sin(t*0.6+i)*6)%140,88+(i*13)%24,1.6,1.6);}g.globalAlpha=1;}
+  g.fillStyle='rgba(255,255,255,0.09)';g.beginPath();g.moveTo(0,0);g.lineTo(46,0);g.lineTo(0,70);g.closePath();g.fill();
+  winTex.needsUpdate=true;
+}
+function windowLine(){
+  var s=nowSeason(),h=new Date().getHours(),night=(h>=19||h<5);
+  var base={spring:'さくらが ちらついてる',summer:'みどりが まぶしい',autumn:'おちばが ひらひら',winter:'ゆきが ちらついてる'}[s];
+  return 'そとは '+SEASON_JP[s]+'。'+(night?'よぞらが きれい':base);
+}
+var winG=new T.Group();winG.position.set(-0.7,1.55,-2.95);scene.add(winG);
+var wfShape=new T.Shape();wfShape.moveTo(-0.85,-0.65);wfShape.lineTo(0.85,-0.65);wfShape.lineTo(0.85,0.65);wfShape.lineTo(-0.85,0.65);wfShape.lineTo(-0.85,-0.65);
+var wfHole=new T.Path();wfHole.moveTo(-0.75,-0.55);wfHole.lineTo(0.75,-0.55);wfHole.lineTo(0.75,0.55);wfHole.lineTo(-0.75,0.55);wfHole.lineTo(-0.75,-0.55);
+wfShape.holes.push(wfHole);
+var wfGeo=new T.ExtrudeGeometry(wfShape,{depth:0.08,bevelEnabled:true,bevelThickness:0.02,bevelSize:0.015,bevelSegments:1,curveSegments:4});
+wfGeo.translate(0,0,-0.04);
+var winFrame=mk(wfGeo,0xb98b5e,{t:0.022,kind:'window'});winG.add(winFrame);
+var winGlass=new T.Mesh(new T.PlaneGeometry(1.56,1.16),new T.MeshBasicMaterial({map:winTex,side:T.DoubleSide}));
+winGlass.position.set(0,0,-0.03);winGlass.userData.kind='window';winG.add(winGlass);pickables.push(winGlass);
+[[0.05,1.1,0.05],[1.5,0.05,0.05]].forEach(function(f){
+  var b=mk(new T.BoxGeometry(f[0],f[1],f[2]),0xb98b5e,{noOutline:true,cast:false,kind:'window'});winG.add(b);
+});
+var winSill=mk(new T.BoxGeometry(1.95,0.06,0.3),0xe7c99c,{t:0.015,kind:'window'});winSill.position.set(0,-0.68,0.12);winG.add(winSill);
+drawWindow(1);
 
 /* TV + cabinet */
 var tvG=new T.Group();tvG.position.set(-3.5,0,-0.3);tvG.rotation.y=1.25;scene.add(tvG);
@@ -1121,6 +1205,7 @@ var _tmpC=new T.Color();
 function updateWorld(dt,t){
   if(tv.noise>0)tv.noise-=dt;
   drawScreen(t);
+  drawWindow(t);
   var night=isNight();
   var base=tv.noise>0?0xffffff:CH_LIGHT[tv.ch];
   _tmpC.setHex(base);tvLight.color.lerp(_tmpC,Math.min(1,dt*6));
@@ -1183,6 +1268,7 @@ function handleClick(e){
   if(intro.phase!=='room')return;
   if(works.active||works.page)return;
   switch(h.kind){
+    case 'window':say(windowLine(),3.2,'think');break;
     case 'calendar':renderCalendarDom();openPanel('calendar');break;
     case 'cupboard':bWorks();break;
     case 'char':
@@ -1388,7 +1474,11 @@ var doorWell=mk(new T.BoxGeometry(0.62,1.05,0.02),0x2a2b33,{noOutline:true,cast:
 wallsG.add(doorWell);
 var doorPivot=new T.Group();doorPivot.position.set(-0.1,0.16,HD/2+0.03);wallsG.add(doorPivot);
 var hDoor=mk(roundedBoxGeo(0.62,1.05,0.06,0.05,0.02),WOODD,{t:0.02,kind:'house'});hDoor.position.set(0.31,0.525,0);doorPivot.add(hDoor);
-var hKnob=mk(new T.SphereGeometry(0.035,10,8),0xf0e2a8,{noOutline:true,cast:false});hKnob.position.set(0.5,0.0,0.05);doorPivot.add(hKnob);
+[1,-1].forEach(function(sd){
+  var rg=new T.CylinderGeometry(0.06,0.06,0.014,18);rg.rotateX(Math.PI/2);
+  var rose=mk(rg,0xd9c27a,{t:0.01,cast:false});rose.position.set(0.5,0.5,0.037*sd);doorPivot.add(rose);
+  var kb=mk(new T.SphereGeometry(0.045,14,10),0xf0e2a8,{t:0.012,cast:false});kb.position.set(0.5,0.5,0.082*sd);doorPivot.add(kb);
+});
 var hStep=mk(roundedBoxGeo(1.0,0.1,0.55,0.04,0.02),0xcfd3d9,{t:0.02,kind:'house'});hStep.position.set(0.21,0.05,HD/2+0.4);wallsG.add(hStep);
 /* window */
 var winG=new T.Group();winG.position.set(-0.85,0.95,HD/2);wallsG.add(winG);
@@ -1568,8 +1658,8 @@ Object.keys(panelEls).forEach(function(k){
 /* てんきよほうは「てきとう」: あしたの日付から、その日ごとに きまる おはなしの よほう */
 function dummyTomorrow(){
   var d=new Date(Date.now()+864e5),seed=d.getFullYear()*372+d.getMonth()*31+d.getDate(),h=(seed*2654435761)>>>0,mo=d.getMonth();
-  var pool={winter:['clear','part','cloud','snow','clear'],spring:['clear','part','rain','cloud','part'],summer:['clear','part','rain','storm','cloud'],autumn:['clear','part','cloud','rain','part']}[seasonOf(mo,null)];
-  var kind=pool[h%pool.length],base=[7,8,12,17,21,25,29,31,27,21,15,10][mo],hi=base+(h>>>3)%5-1,lo=hi-6-(h>>>5)%3;
+  var pool={winter:['clear','part','cloud','snow','clear'],spring:['clear','part','rain','cloud','part'],summer:['clear','part','rain','storm','cloud'],autumn:['clear','part','cloud','rain','part']}[WINC.tropical?'summer':seasonOf(mo,WINC.lat)];
+  var kind=pool[h%pool.length],base=(WINC.tropical?29:[7,8,12,17,21,25,29,31,27,21,15,10][WINC.lat<0?(mo+6)%12:mo]),hi=base+(h>>>3)%5-1,lo=hi-6-(h>>>5)%3;
   var pop={clear:0,part:10,cloud:30,fog:20,rain:80,snow:60,storm:90}[kind]+(h>>>7)%10;
   return {kind:kind,hi:hi,lo:lo,pop:Math.min(100,pop)};
 }
@@ -1585,6 +1675,14 @@ function wxKind(code){
   if(code>=95)return 'storm';
   if((code>=71&&code<=77)||code===85||code===86)return 'snow';
   return 'rain';
+}
+function visitorClimate(){
+  var tz='';try{tz=Intl.DateTimeFormat().resolvedOptions().timeZone||'';}catch(e){}
+  var south=/^(Australia|Antarctica)\//.test(tz)||/^(Pacific\/(Auckland|Fiji|Chatham|Tongatapu|Apia|Noumea|Tahiti)|America\/(Sao_Paulo|Argentina|Buenos_Aires|Santiago|Lima|La_Paz|Asuncion|Montevideo|Bahia|Fortaleza|Recife|Cuiaba|Campo_Grande|Maceio|Cordoba)|Africa\/(Johannesburg|Maputo|Harare|Lusaka|Windhoek|Gaborone|Luanda|Lubumbashi|Maseru|Mbabane|Blantyre)|Indian\/(Antananarivo|Mauritius|Reunion))/.test(tz);
+  var tropical=/^(Asia\/(Singapore|Jakarta|Kuala_Lumpur|Makassar|Pontianak|Jayapura|Brunei)|Africa\/(Nairobi|Kampala|Lagos|Libreville|Kinshasa|Mogadishu|Dar_es_Salaam|Addis_Ababa|Accra|Abidjan)|America\/(Bogota|Guayaquil|Panama|Caracas|Belem|Manaus)|Pacific\/(Kiritimati|Tarawa|Majuro|Palau|Port_Moresby))/.test(tz);
+  if(tropical)south=false;
+  else if(!south){var y=new Date().getFullYear(),a=new Date(y,0,1).getTimezoneOffset(),b=new Date(y,6,1).getTimezoneOffset();if(a<b)south=true;}
+  return {lat:south?-1:1,tropical:tropical,tz:tz};
 }
 function seasonOf(month,lat){
   var m=(typeof lat==='number'&&lat<0)?(month+6)%12:month;
@@ -1616,7 +1714,7 @@ function chooseFruit(month,lat,temp,kind){
   return r;
 }
 /* WX-LOGIC-END */
-var fruit=chooseFruit(new Date().getMonth(),null,null,null);
+var fruit=chooseFruit(WINC.tropical?6:new Date().getMonth(),WINC.lat,null,null);
 function applyFruit(f){
   fruit=f;
   mikans.forEach(function(m){
